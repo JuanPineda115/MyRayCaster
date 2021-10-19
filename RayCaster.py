@@ -230,7 +230,7 @@ def main():
         pygame.display.flip()
 
 def newText(text, font):
-    textSurface = font.render(text, True, pygame.Color("black"))
+    textSurface = font.render(text, True, pygame.Color("gray"))
     return textSurface, textSurface.get_rect()
 
 def menu():
@@ -238,19 +238,32 @@ def menu():
 
     while flag:
         for ev in pygame.event.get():
-            if ev.type == pygame.QUIT:
+            if ev.type == pygame.MOUSEBUTTONDOWN:
                 flag = False
+                return True
+            elif ev.type == pygame.QUIT:
+                flag = False
+                return False
             else:
+                #screen fill
                 screen.fill(pygame.Color(62, 86, 181))
-                titleFont = pygame.font.SysFont("Arial", 35)
+                #title text
+                titleFont = pygame.font.Font("pixfont.ttf", 50)
                 surface, tr = newText("HoopAh's RayCaster", titleFont)
                 tr.center = ((width/2),(height/2))
                 screen.blit(surface, tr)
+                #click to continue text
+                ctcText = pygame.font.Font('pixfont.ttf', 30)
+                cs, ctr = newText("CLICK ANYWHERE TO CONTINUE", ctcText)
+                ctr.center = ((width/2), 300)
+                screen.blit(cs, ctr)
                 pygame.display.update()
                 clock.tick(60)
 
 
-menu()
-main()
+if(menu()):
+    main()
+else:
+    pass
 
 pygame.quit()
