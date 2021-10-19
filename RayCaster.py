@@ -1,25 +1,16 @@
 import pygame
-
+from pygame.locals import *
 from math import cos, sin, pi
 
 RAY_AMOUNT = 100
 
-wallcolors = {
-    '1': pygame.Color('red'),
-    '2': pygame.Color('green'),
-    '3': pygame.Color('blue'),
-    '4': pygame.Color('yellow'),
-    '5': pygame.Color('purple')
-    }
-
 wallTextures = {
-    '1': pygame.image.load('textures/wall1.png'),
-    '2': pygame.image.load('textures/wall2.png'),
+    '1': pygame.image.load('textures/wall2.png'),
+    '2': pygame.image.load('textures/wall1.png'),
     '3': pygame.image.load('textures/wall3.png'),
     '4': pygame.image.load('textures/METAL.png'),
     '5': pygame.image.load('textures/MARBLOD1.png')
 }
-
 
 class Raycaster(object):
     def __init__(self, screen):
@@ -32,7 +23,7 @@ class Raycaster(object):
 
         self.maxdistance = 300
 
-        self.stepSize = 5
+        self.stepSize = 3
         self.turnSize = 5
 
         self.player = {
@@ -48,8 +39,8 @@ class Raycaster(object):
                 self.map.append( list(line.rstrip()) )
 
     def drawBlock(self, x, y, id):
-        tex = wallTextures[id]
-        tex = pygame.transform.scale(tex, (self.blocksize, self.blocksize) )
+        tex = wallTextures[id].convert()
+        tex = pygame.transform.scale(tex, (self.blocksize, self.blocksize))
         rect = tex.get_rect()
         rect = rect.move((x,y))
         self.screen.blit(tex, rect)
@@ -130,15 +121,13 @@ class Raycaster(object):
             rayWidth = int(( 1 / RAY_AMOUNT) * halfWidth)
 
             startX = halfWidth + int(( (column / RAY_AMOUNT) * halfWidth))
-
-            # perceivedHeight = screenHeight / (distance * cos( rayAngle - viewAngle)) * wallHeight
             h = self.height / (dist * cos( (angle - self.player["angle"]) * pi / 180)) * self.wallheight
             startY = int(halfHeight - h/2)
             endY = int(halfHeight + h/2)
 
             color_k = (1 - min(1, dist / self.maxdistance)) * 255
 
-            tex = wallTextures[id]
+            tex = wallTextures[id].convert()
             tex = pygame.transform.scale(tex, (tex.get_width() * rayWidth, int(h)))
             # tex.fill((color_k,color_k,color_k), special_flags=pygame.BLEND_MULT)
             tx = int(tx * tex.get_width())
@@ -155,8 +144,11 @@ width = 1000
 height = 500
 
 pygame.init()
-screen = pygame.display.set_mode((width,height), pygame.DOUBLEBUF | pygame.HWACCEL )
+flags = HWACCEL | DOUBLEBUF
+screen = pygame.display.set_mode((width,height), flags, 16)
 screen.set_alpha(None)
+
+pygame.event.set_allowed([QUIT, KEYDOWN, KEYUP, MOUSEBUTTONDOWN])
 
 rCaster = Raycaster(screen)
 rCaster.load_map("map.txt")
@@ -171,54 +163,47 @@ def updateFPS():
 
 def main():
     isRunning = True
+    isPressing = True
     while isRunning:
-
         for ev in pygame.event.get():
             if ev.type == pygame.QUIT:
                 isRunning = False
-
             elif ev.type == pygame.KEYDOWN:
-                newX = rCaster.player['x']
-                newY = rCaster.player['y']
-                forward = rCaster.player['angle'] * pi / 180
-                right = (rCaster.player['angle'] + 90) * pi / 180
-
                 if ev.key == pygame.K_ESCAPE:
                     isRunning = False
-                elif ev.key == pygame.K_w:
-                    newX += cos(forward) * rCaster.stepSize
-                    newY += sin(forward) * rCaster.stepSize
-                elif ev.key == pygame.K_s:
-                    newX -= cos(forward) * rCaster.stepSize
-                    newY -= sin(forward) * rCaster.stepSize
-                elif ev.key == pygame.K_a:
-                    newX -= cos(right) * rCaster.stepSize
-                    newY -= sin(right) * rCaster.stepSize
-                elif ev.key == pygame.K_d:
-                    newX += cos(right) * rCaster.stepSize
-                    newY += sin(right) * rCaster.stepSize
-                elif ev.key == pygame.K_q:
-                    rCaster.player['angle'] -= rCaster.turnSize
-                elif ev.key == pygame.K_e:
-                    rCaster.player['angle'] += rCaster.turnSize
+        keys = pygame.key.get_pressed()
+        newX = rCaster.player['x']
+        newY = rCaster.player['y']
+        forward = rCaster.player['angle'] * pi / 180
+        right = (rCaster.player['angle'] + 90) * pi / 180
+        if keys[K_w]:
+            newX += cos(forward) * rCaster.stepSize + 0.5
+            newY += sin(forward) * rCaster.stepSize + 0.5
+        elif keys[K_s]:
+            newX -= cos(forward) * rCaster.stepSize + 0.5
+            newY -= sin(forward) * rCaster.stepSize + 0.5
+        elif keys[K_a]:
+            newX -= cos(right) * rCaster.stepSize + 0.5
+            newY -= sin(right) * rCaster.stepSize + 0.5
+        elif keys[K_d]:
+            newX += cos(right) * rCaster.stepSize + 0.5
+            newY += sin(right) * rCaster.stepSize + 0.5
+        elif keys[K_q]:
+            rCaster.player['angle'] -= rCaster.turnSize + 0.5
+        elif keys[K_e]:
+            rCaster.player['angle'] += rCaster.turnSize + 0.5
 
-                i = int(newX/rCaster.blocksize)
-                j = int(newY/rCaster.blocksize)
-
-                if rCaster.map[j][i] == ' ':
-                    rCaster.player['x'] = newX
-                    rCaster.player['y'] = newY
-
+        i = int(newX/rCaster.blocksize)
+        j = int(newY/rCaster.blocksize)
+        if rCaster.map[j][i] == ' ':
+            rCaster.player['x'] = newX
+            rCaster.player['y'] = newY
 
         screen.fill(pygame.Color("gray"))
-
         # Techo
         screen.fill(pygame.Color("saddlebrown"), (int(width / 2), 0,  int(width / 2), int(height / 2)))
-
         # Piso
         screen.fill(pygame.Color("dimgray"), (int(width / 2), int(height / 2),  int(width / 2), int(height / 2)))
-
-
         rCaster.render()
 
         #FPS
@@ -248,7 +233,7 @@ def menu():
                 #screen fill
                 screen.fill(pygame.Color(62, 86, 181))
                 #title text
-                titleFont = pygame.font.Font("pixfont.ttf", 50)
+                titleFont = pygame.font.Font("pixfont.ttf", 90)
                 surface, tr = newText("HoopAh's RayCaster", titleFont)
                 tr.center = ((width/2),(height/2))
                 screen.blit(surface, tr)
@@ -259,7 +244,6 @@ def menu():
                 screen.blit(cs, ctr)
                 pygame.display.update()
                 clock.tick(60)
-
 
 if(menu()):
     main()
