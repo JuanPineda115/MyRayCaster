@@ -1,15 +1,16 @@
-import pygame
+import pygame, multiprocessing, threading
 from pygame.locals import *
+from pygame_gui import *
 from math import cos, sin, pi
 
 RAY_AMOUNT = 100
 
 wallTextures = {
-    '1': pygame.image.load('textures/wall2.png'),
-    '2': pygame.image.load('textures/wall1.png'),
-    '3': pygame.image.load('textures/wall3.png'),
-    '4': pygame.image.load('textures/METAL.png'),
-    '5': pygame.image.load('textures/MARBLOD1.png')
+    '1': pygame.image.load('src/textures/wall2.png'),
+    '2': pygame.image.load('src/textures/wall1.png'),
+    '3': pygame.image.load('src/textures/wall3.png'),
+    '4': pygame.image.load('src/textures/METAL.png'),
+    '5': pygame.image.load('src/textures/MARBLOD1.png')
 }
 
 class Raycaster(object):
@@ -144,7 +145,7 @@ width = 1000
 height = 500
 
 pygame.init()
-flags = HWACCEL | DOUBLEBUF
+flags = HWSURFACE and DOUBLEBUF
 screen = pygame.display.set_mode((width,height), flags, 16)
 screen.set_alpha(None)
 
@@ -161,7 +162,7 @@ def updateFPS():
     fps = font.render(fps, 1, pygame.Color("white"))
     return fps
 
-def main():
+def gaem():
     isRunning = True
     isPressing = True
     while isRunning:
@@ -209,44 +210,80 @@ def main():
         #FPS
         screen.fill(pygame.Color("black"), (0,0,30,30) )
         screen.blit(updateFPS(), (0,0))
-        clock.tick(60)
-
-
-        pygame.display.flip()
+        clock.tick(100)
+        pygame.display.update()
 
 def newText(text, font):
-    textSurface = font.render(text, True, pygame.Color("gray"))
+    textSurface = font.render(text, True, pygame.Color("Black"))
     return textSurface, textSurface.get_rect()
 
+clicking = False
 def menu():
     flag = True
-
     while flag:
+        #menu event loop
+        click = False
         for ev in pygame.event.get():
             if ev.type == pygame.MOUSEBUTTONDOWN:
-                flag = False
-                return True
+                if ev.button == 1:
+                    click = True
             elif ev.type == pygame.QUIT:
                 flag = False
                 return False
-            else:
-                #screen fill
-                screen.fill(pygame.Color(62, 86, 181))
-                #title text
-                titleFont = pygame.font.Font("pixfont.ttf", 90)
-                surface, tr = newText("HoopAh's RayCaster", titleFont)
-                tr.center = ((width/2),(height/2))
-                screen.blit(surface, tr)
-                #click to continue text
-                ctcText = pygame.font.Font('pixfont.ttf', 30)
-                cs, ctr = newText("CLICK ANYWHERE TO CONTINUE", ctcText)
-                ctr.center = ((width/2), 300)
-                screen.blit(cs, ctr)
-                pygame.display.update()
-                clock.tick(60)
+        #screen fill
+        bg = pygame.image.load("src/images/titleScreen.png")
+        bgrect = bg.get_rect()
+        screen.blit(bg, bgrect)
+        # screen.fill(pygame.Color(62, 86, 181))
+        #mouse position
+        mx, my = pygame.mouse.get_pos()
+        #title text
+        titleFont = pygame.font.Font("src/fonts/pixfont.ttf", 90)
+        surface, tr = newText("HoopAh's RayCaster", titleFont)
+        tr.center = ((width/2),(height/2)-100)
+        screen.blit(surface, tr)
+        #Buttons
+        gamebutton = pygame.Rect(450, 225, 100, 50)
+        quitbutton = pygame.Rect(450, 285, 100, 50)
+        #button listeners
+        if gamebutton.collidepoint((mx, my)):
+            if click:
+                #breaks the menu loop
+                flag = False 
+                #returns true to start the game
+                return True
+        elif quitbutton.collidepoint((mx, my)):
+            if click:
+                #breaks the menu loop
+                flag = False
+                #returns false to end the program
+                return False
+        #draw buttons
+        pygame.draw.rect(screen, pygame.Color("gray"), gamebutton)
+        pygame.draw.rect(screen, pygame.Color("gray"), quitbutton)
+        #buttons text
+        ctcText = pygame.font.Font('src/fonts/pixfont.ttf', 30)
+        ptSurf, ptRect = newText("Play", ctcText)
+        ptRect.center = ((width/2), 250)
+        qtSurf, qtRect = newText("Quit", ctcText)
+        qtRect.center = ((width/2), 310)
+        screen.blit(ptSurf, ptRect)
+        screen.blit(qtSurf, qtRect)
+        pygame.display.update()
+        clock.tick(60)
+
+if __name__ == '__main__':
+    threads = []
+    for x in range(1, multiprocessing.cpu_count()):
+        thread = threading.Thread(target= pygame.display.update)
+        threads.append(thread)
+        thread.start()
+
+    for thread in threads:
+        thread.join()
 
 if(menu()):
-    main()
+    gaem()
 else:
     pass
 
