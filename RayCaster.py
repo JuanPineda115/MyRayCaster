@@ -1,4 +1,4 @@
-import pygame
+import pygame, multiprocessing, threading
 from pygame.locals import *
 from math import cos, sin, pi
 
@@ -144,7 +144,7 @@ width = 1000
 height = 500
 
 pygame.init()
-flags = HWACCEL | DOUBLEBUF
+flags = HWSURFACE and DOUBLEBUF
 screen = pygame.display.set_mode((width,height), flags, 16)
 screen.set_alpha(None)
 
@@ -161,7 +161,7 @@ def updateFPS():
     fps = font.render(fps, 1, pygame.Color("white"))
     return fps
 
-def main():
+def gaem():
     isRunning = True
     isPressing = True
     while isRunning:
@@ -209,10 +209,8 @@ def main():
         #FPS
         screen.fill(pygame.Color("black"), (0,0,30,30) )
         screen.blit(updateFPS(), (0,0))
-        clock.tick(60)
-
-
-        pygame.display.flip()
+        clock.tick(100)
+        pygame.display.update()
 
 def newText(text, font):
     textSurface = font.render(text, True, pygame.Color("gray"))
@@ -245,8 +243,18 @@ def menu():
                 pygame.display.update()
                 clock.tick(60)
 
+if __name__ == '__main__':
+    threads = []
+    for x in range(1, multiprocessing.cpu_count()):
+        thread = threading.Thread(target= pygame.display.update)
+        threads.append(thread)
+        thread.start()
+
+    for thread in threads:
+        thread.join()
+
 if(menu()):
-    main()
+    gaem()
 else:
     pass
 
