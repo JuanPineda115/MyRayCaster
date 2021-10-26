@@ -1,4 +1,4 @@
-import pygame, multiprocessing, threading
+import pygame
 from pygame.locals import *
 from pygame_gui import *
 from math import cos, sin, pi
@@ -17,22 +17,17 @@ class Raycaster(object):
     def __init__(self, screen):
         self.screen = screen
         _, _, self.width, self.height = screen.get_rect()
-
         self.map = []
         self.blocksize = 50
         self.wallheight = 50
-
         self.maxdistance = 300
-
         self.stepSize = 3
         self.turnSize = 5
-
         self.player = {
            'x' : 100,
            'y' : 175,
            'fov': 60,
            'angle': 180 }
-
 
     def load_map(self, filename):
         with open(filename) as file:
@@ -164,7 +159,6 @@ def updateFPS():
 
 def gaem():
     isRunning = True
-    isPressing = True
     while isRunning:
         for ev in pygame.event.get():
             if ev.type == pygame.QUIT:
@@ -271,16 +265,6 @@ def menu():
         screen.blit(qtSurf, qtRect)
         pygame.display.update()
         clock.tick(60)
-
-if __name__ == '__main__':
-    threads = []
-    for x in range(1, multiprocessing.cpu_count()):
-        thread = threading.Thread(target= pygame.display.update)
-        threads.append(thread)
-        thread.start()
-
-    for thread in threads:
-        thread.join()
 
 if(menu()):
     gaem()
