@@ -1,6 +1,6 @@
 import pygame
 from pygame.locals import *
-from pygame_gui import *
+from pygame.sprite import collide_circle_ratio
 from math import cos, sin, pi
 
 
@@ -10,10 +10,10 @@ class Raycaster(object):
         _, _, self.width, self.height = screen.get_rect()
         self.map = []
         self.blocksize = 50
-        self.wallheight = 50
+        self.wallheight = 45
         self.maxdistance = 300
         self.stepSize = 3
-        self.turnSize = 5
+        self.turnSize = 3
         self.player = {
             'x': 100,
             'y': 175,
@@ -27,7 +27,7 @@ class Raycaster(object):
 
     def drawBlock(self, x, y, id):
         tex = wallTextures[id].convert()
-        tex = pygame.transform.scale(tex, (self.blocksize, self.blocksize))
+        tex = pygame.transform.scale(tex, (self.blocksize, self.blocksize)).convert()
         rect = tex.get_rect()
         rect = rect.move((x, y))
         self.screen.blit(tex, rect)
@@ -95,12 +95,9 @@ class Raycaster(object):
                 (dist *
                  cos((angle - self.player["angle"]) * pi / 180)) * self.wallheight
             startY = int(halfHeight - h/2)
-            # endY = int(halfHeight + h/2)
-            # color_k = (1 - min(1, dist / self.maxdistance)) * 255
             tex = wallTextures[id].convert()
             tex = pygame.transform.scale(
                 tex, (tex.get_width() * rayWidth, int(h)))
-            # tex.fill((color_k,color_k,color_k), special_flags=pygame.BLEND_MULT)
             tx = int(tx * tex.get_width())
             self.screen.blit(tex, (startX, startY),
                              (tx, 0, rayWidth, tex.get_height()))
@@ -119,34 +116,38 @@ def updateFPS():
 
 def gaem():
     isRunning = True
+    delta = clock.tick(100)
+    dTime = 1 / float(delta)
     while isRunning:
-        for ev in pygame.event.get():
-            if ev.type == pygame.QUIT:
-                isRunning = False
-            elif ev.type == pygame.KEYDOWN:
-                if ev.key == pygame.K_ESCAPE:
-                    isRunning = False
         keys = pygame.key.get_pressed()
+        for ev in pygame.event.get():
+            if (
+                ev.type != pygame.QUIT
+                and ev.type == pygame.KEYDOWN
+                and ev.key == pygame.K_ESCAPE
+                or ev.type == pygame.QUIT
+            ):
+                isRunning = False
         newX = rCaster.player['x']
         newY = rCaster.player['y']
         forward = rCaster.player['angle'] * pi / 180
         right = (rCaster.player['angle'] + 90) * pi / 180
         if keys[K_w]:
-            newX += cos(forward) * rCaster.stepSize + 0.5
-            newY += sin(forward) * rCaster.stepSize + 0.5
+            newX += cos(forward) * rCaster.stepSize + 0.5 * dTime
+            newY += sin(forward) * rCaster.stepSize + 0.5 * dTime
         elif keys[K_s]:
-            newX -= cos(forward) * rCaster.stepSize + 0.5
-            newY -= sin(forward) * rCaster.stepSize + 0.5
+            newX -= cos(forward) * rCaster.stepSize + 0.5 * dTime
+            newY -= sin(forward) * rCaster.stepSize + 0.5 * dTime
         elif keys[K_a]:
-            newX -= cos(right) * rCaster.stepSize + 0.5
-            newY -= sin(right) * rCaster.stepSize + 0.5
+            newX -= cos(right) * rCaster.stepSize + 0.5 * dTime
+            newY -= sin(right) * rCaster.stepSize + 0.5 * dTime
         elif keys[K_d]:
-            newX += cos(right) * rCaster.stepSize + 0.5
-            newY += sin(right) * rCaster.stepSize + 0.5
+            newX += cos(right) * rCaster.stepSize + 0.5 * dTime
+            newY += sin(right) * rCaster.stepSize + 0.5 * dTime
         elif keys[K_q]:
-            rCaster.player['angle'] -= rCaster.turnSize + 0.5
+            rCaster.player['angle'] -= rCaster.turnSize + 0.5 * dTime
         elif keys[K_e]:
-            rCaster.player['angle'] += rCaster.turnSize + 0.5
+            rCaster.player['angle'] += rCaster.turnSize + 0.5 * dTime
         i = int(newX/rCaster.blocksize)
         j = int(newY/rCaster.blocksize)
         if rCaster.map[j][i] == ' ':
@@ -188,7 +189,6 @@ def menu():
         bg = pygame.image.load("src/images/titleScreen.png")
         bgrect = bg.get_rect()
         screen.blit(bg, bgrect)
-        # screen.fill(pygame.Color(62, 86, 181))
         # mouse position
         mx, my = pygame.mouse.get_pos()
         # title text
@@ -217,14 +217,17 @@ def menu():
         pygame.draw.rect(screen, pygame.Color("gray"), quitbutton)
         # buttons text
         ctcText = pygame.font.Font('src/fonts/pixfont.ttf', 30)
+        # play button
         ptSurf, ptRect = newText("Play", ctcText)
         ptRect.center = ((width/2), 250)
+        screen.blit(ptSurf, ptRect)
+        # quit button
         qtSurf, qtRect = newText("Quit", ctcText)
         qtRect.center = ((width/2), 310)
-        screen.blit(ptSurf, ptRect)
         screen.blit(qtSurf, qtRect)
         pygame.display.update()
-        clock.tick(60)
+        clock.tick(100)
+
 
 RAY_AMOUNT = 100
 
@@ -252,9 +255,6 @@ rCaster.load_map("map.txt")
 clock = pygame.time.Clock()
 font = pygame.font.SysFont("Arial", 25)
 
-if(menu()):
+if (menu()):
     gaem()
-else:
-    pass
-
 pygame.quit()
