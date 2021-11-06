@@ -1,33 +1,70 @@
 import pygame
 from pygame.locals import *
 from pygame.sprite import collide_circle_ratio
-from math import cos, sin, pi
+from math import cos, sin, pi, atan2
 
 
 class Raycaster(object):
+    #--------------------------------------Funciones basicas raycaster--------------------------------------#
     def __init__(self, screen):
         self.screen = screen
         _, _, self.width, self.height = screen.get_rect()
         self.map = []
+        self.zbuffer = [float('inf') for z in range(self.width)]
         self.blocksize = 50
-        self.wallheight = 45
+        self.wallheight = 50
         self.maxdistance = 300
-        self.stepSize = 3
-        self.turnSize = 3
+        self.stepSize = 5
+        self.turnSize = 5
         self.player = {
             'x': 100,
-            'y': 175,
+            'y': 70,
             'fov': 60,
-            'angle': 180}
+            'angle': 0}
+        self.hitEnemy = False
 
     def load_map(self, filename):
+        self.map = []
         with open(filename) as file:
             for line in file.readlines():
                 self.map.append(list(line.rstrip()))
 
+    def drawMinimap(self):
+        minimapWidth = 100
+        minimapHeight = 100
+        minimapSurface = pygame.Surface((500, 500))
+        minimapSurface.fill(pygame.Color("gray"))
+        for x in range(0, 500, self.blocksize):
+            for y in range(0, 500, self.blocksize):
+                i = int(x/self.blocksize)
+                j = int(y/self.blocksize)
+                if (
+                    j < len(self.map)
+                    and i < len(self.map[j])
+                    and self.map[j][i] != ' '
+                ):
+                    tex = wallTextures[self.map[j][i]]
+                    tex = pygame.transform.scale(
+                        tex, (self.blocksize, self.blocksize))
+                    rect = tex.get_rect()
+                    rect = rect.move((x, y))
+                    minimapSurface.blit(tex, rect)
+        rect = (int(self.player['x'] - 4), int(self.player['y']) - 4, 10, 10)
+        minimapSurface.fill(pygame.Color('black'), rect)
+
+        for enemy in enemies:
+            rect = (enemy['x'] - 4, enemy['y'] - 4, 10, 10)
+            minimapSurface.fill(pygame.Color('red'), rect)
+
+        minimapSurface = pygame.transform.scale(
+            minimapSurface, (minimapWidth, minimapHeight))
+        self.screen.blit(minimapSurface, (self.width -
+                                          minimapWidth, self.height - minimapHeight))
+
     def drawBlock(self, x, y, id):
         tex = wallTextures[id].convert()
-        tex = pygame.transform.scale(tex, (self.blocksize, self.blocksize)).convert()
+        tex = pygame.transform.scale(
+            tex, (self.blocksize, self.blocksize)).convert()
         rect = tex.get_rect()
         rect = rect.move((x, y))
         self.screen.blit(tex, rect)
@@ -52,72 +89,130 @@ class Raycaster(object):
             y += stepY
             i = int(x/self.blocksize)
             j = int(y/self.blocksize)
-            if j < len(self.map):
-                if i < len(self.map[j]):
-                    if self.map[j][i] != ' ':
-                        hitX = x - i*self.blocksize
-                        hitY = y - j*self.blocksize
-                        hit = 0
-                        if 1 < hitX < self.blocksize-1:
-                            if hitY < 1:
-                                hit = self.blocksize - hitX
-                            elif hitY >= self.blocksize-1:
-                                hit = hitX
-                        elif 1 < hitY < self.blocksize-1:
-                            if hitX < 1:
-                                hit = hitY
-                            elif hitX >= self.blocksize-1:
-                                hit = self.blocksize - hitY
-                        tx = hit / self.blocksize
-                        pygame.draw.line(self.screen, pygame.Color(
-                            'white'), playerPos, (x, y))
-                        return dist, self.map[j][i], tx
+            if (
+                j < len(self.map)
+                and i < len(self.map[j])
+                and self.map[j][i] != ' '
+            ):
+                hitX = x - i*self.blocksize
+                hitY = y - j*self.blocksize
+                hit = 0
+                if 1 < hitX < self.blocksize-1:
+                    if hitY < 1:
+                        hit = self.blocksize - hitX
+                    elif hitY >= self.blocksize-1:
+                        hit = hitX
+                elif 1 < hitY < self.blocksize-1:
+                    if hitX < 1:
+                        hit = hitY
+                    elif hitX >= self.blocksize-1:
+                        hit = self.blocksize - hitY
+                tx = hit / self.blocksize
+                return dist, self.map[j][i], tx
+
+    def drawSprite(self, obj, size):
+        # Pitagoras
+        spriteDist = ((self.player['x'] - obj['x']) **
+                      2 + (self.player['y'] - obj['y']) ** 2) ** 0.5
+
+        # Angulo
+        spriteAngle = atan2(obj['y'] - self.player['y'],
+                            obj['x'] - self.player['x']) * 180 / pi
+
+        # Tamaño del sprite
+        aspectRatio = obj['sprite'].get_width() / obj['sprite'].get_height()
+        spriteHeight = (self.height / spriteDist) * size
+        spriteWidth = spriteHeight * aspectRatio
+
+        # Buscar el punto inicial para dibujar el sprite
+        angleDif = (spriteAngle - self.player['angle']) % 360
+        angleDif = (angleDif - 360) if angleDif > 180 else angleDif
+        startX = angleDif * self.width / self.player['fov']
+        startX += (self.width / 2) - (spriteWidth / 2)
+        startY = (self.height / 2) - (spriteHeight / 2)
+        startX = int(startX)
+        startY = int(startY)
+
+        for x in range(startX, startX + int(spriteWidth)):
+            if (0 < x < self.width) and self.zbuffer[x] >= spriteDist:
+                for y in range(startY, startY + int(spriteHeight)):
+                    tx = int((x - startX) *
+                             obj['sprite'].get_width() / spriteWidth)
+                    ty = int((y - startY) *
+                             obj['sprite'].get_height() / spriteHeight)
+                    texColor = obj['sprite'].get_at((tx, ty))
+                    if texColor != SPRITE_BACKGROUND and texColor[3] > 128:
+                        self.screen.set_at((x, y), texColor)
+
+                        if y == self.height / 2:
+                            self.zbuffer[x] = spriteDist
+                            if x == self.width / 2:
+                                self.hitEnemy = True
 
     def render(self):
-        halfWidth = int(self.width / 2)
         halfHeight = int(self.height / 2)
-        for x in range(0, halfWidth, self.blocksize):
-            for y in range(0, self.height, self.blocksize):
-                i = int(x/self.blocksize)
-                j = int(y/self.blocksize)
-                if j < len(self.map):
-                    if i < len(self.map[j]):
-                        if self.map[j][i] != ' ':
-                            self.drawBlock(x, y, self.map[j][i])
-        self.drawPlayerIcon(pygame.Color('black'))
         for column in range(RAY_AMOUNT):
-            angle = self.player['angle'] - (self.player['fov'] / 2) + \
-                (self.player['fov'] * column / RAY_AMOUNT)
+            angle = self.player['angle'] - (self.player['fov'] / 2) + (self.player['fov'] * column / RAY_AMOUNT)
             dist, id, tx = self.castRay(angle)
-            rayWidth = int((1 / RAY_AMOUNT) * halfWidth)
-            startX = halfWidth + int(((column / RAY_AMOUNT) * halfWidth))
-            h = self.height / \
-                (dist *
-                 cos((angle - self.player["angle"]) * pi / 180)) * self.wallheight
+            rayWidth = int(( 1 / RAY_AMOUNT) * self.width)
+            for i in range(rayWidth):
+                self.zbuffer[column * rayWidth + i] = dist
+            startX = int(( (column / RAY_AMOUNT) * self.width))
+            # perceivedHeight = screenHeight / (distance * cos( rayAngle - viewAngle)) * wallHeight
+            h = self.height / (dist * cos( (angle - self.player["angle"]) * pi / 180)) * self.wallheight
             startY = int(halfHeight - h/2)
-            tex = wallTextures[id].convert()
-            tex = pygame.transform.scale(
-                tex, (tex.get_width() * rayWidth, int(h)))
+            endY = int(halfHeight + h/2)
+            color_k = (1 - min(1, dist / self.maxdistance)) * 255
+            tex = wallTextures[id]
+            tex = pygame.transform.scale(tex, (tex.get_width() * rayWidth, int(h)))
             tx = int(tx * tex.get_width())
-            self.screen.blit(tex, (startX, startY),
-                             (tx, 0, rayWidth, tex.get_height()))
-        # Columna divisora
-        for i in range(self.height):
-            self.screen.set_at((halfWidth, i), pygame.Color('black'))
-            self.screen.set_at((halfWidth+1, i), pygame.Color('black'))
-            self.screen.set_at((halfWidth-1, i), pygame.Color('black'))
+            self.screen.blit(tex, (startX, startY), (tx,0,rayWidth,tex.get_height()))
+        self.hitEnemy = False
+        for enemy in enemies:
+            self.drawSprite(enemy, 50)
+        sightRect = (int(self.width / 2 - 2), int(self.height / 2 - 2), 5,5 )
+        self.screen.fill(pygame.Color('red') if self.hitEnemy else pygame.Color('white'), sightRect)
+        self.drawMinimap()
 
 
+#--------------------------------------Funciones utiles--------------------------------------#
 def updateFPS():
     fps = str(int(clock.get_fps()))
     fps = font.render(fps, 1, pygame.Color("white"))
     return fps
 
 
+def quitgame():
+    pygame.quit()
+    quit()
+
+#--------------------------------------Componentes--------------------------------------#
+def newButton(x, y, w, h, text, color, centerx, centery):
+    btnTxt = pygame.font.Font('src/fonts/pixfont.ttf', 30)
+    btn = pygame.Rect(x, y, w, h)
+    pygame.draw.rect(screen, color, btn)
+    bs, br = newText(text, btnTxt)
+    br.center = (centerx, centery)
+    screen.blit(bs, br)
+    return btn
+
+def newText(text, font, colour=pygame.Color("Black")):
+    textSurface = font.render(text, True, colour)
+    return textSurface, textSurface.get_rect()
+
+
+#--------------------------------------pantallas del juego--------------------------------------#
+
+
 def gaem():
     isRunning = True
+    maxVol = 0.80
+    currentVol = 0.30
     delta = clock.tick(100)
     dTime = 1 / float(delta)
+    pygame.mixer.music.load('src/sounds/Retro.mp3')
+    pygame.mixer.music.set_volume(currentVol)
+    pygame.mixer.music.play(-1)
     while isRunning:
         keys = pygame.key.get_pressed()
         for ev in pygame.event.get():
@@ -125,8 +220,10 @@ def gaem():
                 ev.type != pygame.QUIT
                 and ev.type == pygame.KEYDOWN
                 and ev.key == pygame.K_ESCAPE
-                or ev.type == pygame.QUIT
             ):
+                isRunning = False
+                pygame.mixer.music.fadeout(500)
+            elif (ev.type == pygame.QUIT):
                 isRunning = False
         newX = rCaster.player['x']
         newY = rCaster.player['y']
@@ -156,10 +253,10 @@ def gaem():
         screen.fill(pygame.Color("gray"))
         # Techo
         screen.fill(pygame.Color("saddlebrown"),
-                    (int(width / 2), 0,  int(width / 2), int(height / 2)))
+                    (0, 0,  width, int(height / 2)))
         # Piso
-        screen.fill(pygame.Color("dimgray"), (int(width / 2),
-                                              int(height / 2),  int(width / 2), int(height / 2)))
+        screen.fill(pygame.Color("dimgray"), (0,
+                                              int(height / 2),  width, int(height / 2)))
         rCaster.render()
         # FPS
         screen.fill(pygame.Color("black"), (0, 0, 30, 30))
@@ -168,12 +265,60 @@ def gaem():
         pygame.display.update()
 
 
-def newText(text, font):
-    textSurface = font.render(text, True, pygame.Color("Black"))
-    return textSurface, textSurface.get_rect()
+def mapSelect():
+    selecting = True
+    while selecting:
+        # mouse position for buttons
+        mx, my = pygame.mouse.get_pos()
+        click = False
+        for ev in pygame.event.get():
+            if ev.type == pygame.MOUSEBUTTONDOWN:
+                if ev.button == 1:
+                    click = True
+            elif ev.type == pygame.QUIT:
+                selecting = False
+        # screen fill
+        bg = pygame.image.load("src/images/titleScreen.png")
+        bg = pygame.transform.scale(bg, (width, height))
+        bgrect = bg.get_rect()
+        screen.blit(bg, bgrect)
+        #text
+        ss, sr = newText("Select a map", titleFont)
+        sr.center = ((width/2), (height/2)-150)
+        screen.blit(ss, sr)
+        #buttons
+        m1b = newButton(450, 200, 100, 50, "Map 1", pygame.Color("gray"), width/2, 225)
+        m2b = newButton(450, 260, 100, 50, "Map 2", pygame.Color("gray"), width/2, 285)
+        m3b = newButton(450, 320, 100, 50, "Map 3", pygame.Color("gray"), width/2, 345)
+        #listeners
+        if m1b.collidepoint((mx, my)):
+            if click:
+                buttonsActions("src/maps/map.txt")
+                selecting = False
+        elif m2b.collidepoint((mx, my)):
+            if click:
+                buttonsActions("src/maps/map2.txt")
+                selecting = False
+        elif m3b.collidepoint((mx, my)):
+            if click:
+                buttonsActions("src/maps/bonus.txt")
+                selecting = False
+        pygame.display.update()
+        clock.tick(100)
+
+
+def buttonsActions(arg0):
+    #SFX
+    pygame.mixer.music.play()
+                # loads first map
+    rCaster.load_map(arg0)
+    # opens the game
+    gaem()
 
 
 def menu():
+    pygame.mixer.music.load('src/sounds/boom.mp3')
+    pygame.mixer.music.set_volume(0.45)
     flag = True
     while flag:
         # menu event loop
@@ -184,77 +329,88 @@ def menu():
                     click = True
             elif ev.type == pygame.QUIT:
                 flag = False
-                return False
         # screen fill
         bg = pygame.image.load("src/images/titleScreen.png")
+        bg = pygame.transform.scale(bg, (width, height))
         bgrect = bg.get_rect()
         screen.blit(bg, bgrect)
-        # mouse position
-        mx, my = pygame.mouse.get_pos()
         # title text
-        titleFont = pygame.font.Font("src/fonts/pixfont.ttf", 90)
         surface, tr = newText("HoopAh's RayCaster", titleFont)
         tr.center = ((width/2), (height/2)-100)
         screen.blit(surface, tr)
+        # mouse position for buttons
+        mx, my = pygame.mouse.get_pos()
         # Buttons
-        gamebutton = pygame.Rect(450, 225, 100, 50)
-        quitbutton = pygame.Rect(450, 285, 100, 50)
+        gamebutton = newButton(450, 225, 100, 50, "Play", pygame.Color("gray"), width/2, 250)
+        quitbutton = newButton(450, 285, 100, 50, "Quit", pygame.Color("gray"), width/2, 310)
         # button listeners
         if gamebutton.collidepoint((mx, my)):
             if click:
+                #SFX
+                pygame.mixer.music.play()
                 # breaks the menu loop
                 flag = False
-                # returns true to start the game
-                return True
+                # goes to map select menu
+                mapSelect()
         elif quitbutton.collidepoint((mx, my)):
             if click:
+                #SFX
+                pygame.mixer.music.play()
                 # breaks the menu loop
                 flag = False
                 # returns false to end the program
-                return False
-        # draw buttons
-        pygame.draw.rect(screen, pygame.Color("gray"), gamebutton)
-        pygame.draw.rect(screen, pygame.Color("gray"), quitbutton)
-        # buttons text
-        ctcText = pygame.font.Font('src/fonts/pixfont.ttf', 30)
-        # play button
-        ptSurf, ptRect = newText("Play", ctcText)
-        ptRect.center = ((width/2), 250)
-        screen.blit(ptSurf, ptRect)
-        # quit button
-        qtSurf, qtRect = newText("Quit", ctcText)
-        qtRect.center = ((width/2), 310)
-        screen.blit(qtSurf, qtRect)
+                quitgame()
+                # breaks the main loop
+                firstLoop = False
         pygame.display.update()
         clock.tick(100)
 
 
+#--------------------------------------empieza el programa--------------------------------------#
 RAY_AMOUNT = 100
+SPRITE_BACKGROUND = (152, 0, 136, 255)
 
 wallTextures = {
-    '1': pygame.image.load('src/textures/wall2.png'),
-    '2': pygame.image.load('src/textures/wall1.png'),
+    '1': pygame.image.load('src/textures/wall1.png'),
+    '2': pygame.image.load('src/textures/wall2.png'),
     '3': pygame.image.load('src/textures/wall3.png'),
-    '4': pygame.image.load('src/textures/METAL.png'),
-    '5': pygame.image.load('src/textures/MARBLOD1.png')
+    '4': pygame.image.load('src/textures/wall4.png'),
+    '5': pygame.image.load('src/textures/nskull.png'),
+    '6': pygame.image.load('src/textures/bskull.png'),
+    '7': pygame.image.load('src/textures/METAL.png')
 }
+
+enemies = [
+    {"x": 100,
+     "y": 200,
+     "sprite": pygame.image.load('src/sprites/pilar.png')},
+    {"x": 350,
+     "y": 150,
+     "sprite": pygame.image.load('src/sprites/red.png')},
+    {"x": 300,
+     "y": 400,
+     "sprite": pygame.image.load('src/sprites/skull.png')}
+]
 
 width = 1000
 height = 500
 
 pygame.init()
-flags = HWSURFACE and DOUBLEBUF
+pygame.mixer.init()
+
+flags = pygame.DOUBLEBUF | pygame.HWACCEL | pygame.HWSURFACE
 screen = pygame.display.set_mode((width, height), flags, 16)
 screen.set_alpha(None)
 
 pygame.event.set_allowed([QUIT, KEYDOWN, KEYUP, MOUSEBUTTONDOWN])
 
 rCaster = Raycaster(screen)
-rCaster.load_map("map.txt")
 
 clock = pygame.time.Clock()
 font = pygame.font.SysFont("Arial", 25)
+titleFont = pygame.font.Font("src/fonts/pixfont.ttf", 90)
 
-if (menu()):
-    gaem()
-pygame.quit()
+# main
+firstLoop = True
+while firstLoop:
+    menu()
